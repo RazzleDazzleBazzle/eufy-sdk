@@ -13,25 +13,29 @@ const STATION_CHANNEL = 255;
  * (`ArmingMode.home`) and the union type of its values, so callers pass the named constant:
  * `setMode(ArmingMode.home)`.
  *
- * Deliberately NARROWER than the set a device may report. The other five modes are ones the app itself
+ * Deliberately NARROWER than the set a device may report. The other four modes are ones the app itself
  * defines and the `mode` read still names them, but no capture shows one being SENT — and on a
  * fire-and-forget wire a wrong one looks exactly like success. Leaving them out of this union is the
  * compile-time half of the refusal; `mode`'s published argument and the generated rejection are the
  * runtime half.
  *
- * `custom1` is the one exception admitted without its OWN byte capture on this SDK: the wire envelope
+ * `custom1` and `schedule` are admitted without their OWN byte capture on this SDK: the wire envelope
  * for every settable mode is identical bar the `mode_type` integer (confirmed byte-exact for away/home/
- * disarmed), and a prior, independent integration wrote `mode_type: 3` (custom1) live against this same
- * account/station and had it reflected correctly — a real-world confirmation this SDK's own capture
- * session never happened to exercise, not a guess. Which mode custom1 represents is account-specific
- * (whatever the Eufy app's schedule has configured for that slot), so an integration mapping it to a
- * concrete meaning (e.g. "Night") owns that interpretation, not this SDK.
+ * disarmed), and in each case a prior, independent integration wrote that exact integer live against
+ * this same account/station and had it reflected correctly — real-world confirmations this SDK's own
+ * capture session never happened to exercise, not guesses. Which mode custom1 represents is
+ * account-specific (whatever the Eufy app's schedule has configured for that slot), so an integration
+ * mapping it to a concrete meaning (e.g. "Night") owns that interpretation, not this SDK; `schedule`
+ * needs no such mapping, since it names itself.
  */
 export const ArmingMode = {
   /** Armed — full protection, nobody home (wire value 0). */
   away: "away",
   /** Armed for occupancy — reduced/perimeter protection while home (wire value 1). */
   home: "home",
+  /** Resume the Eufy app's own time-based schedule (wire value 2) — see the class doc for why this
+   * is admitted without its own capture. */
+  schedule: "schedule",
   /** A custom guard-mode slot (wire value 3) — meaning is whatever the Eufy app's schedule configures
    * for it on a given account; see the class doc for why this one's admitted without its own capture. */
   custom1: "custom1",
@@ -54,11 +58,11 @@ export const ARMING_CMD = {
    *
    * ⚠️ Only 3 of the 9 modes were exercised in that capture — `mode_type` 0 (away), 63 (disarmed), 1
    * (home), all confirmed byte-exact. Re-confirmed live 2026-08-05: each reported its own MODE_SWITCH
-   * push within ~5s of the write. A fourth, `mode_type` 3 (custom1), is also settable on the strength of
-   * a prior integration's live write against this same account — see {@link ArmingMode}'s doc for why
-   * that counts despite this SDK's own capture never exercising it. The remaining five are named by the
-   * app but never observed leaving it in ANY integration, so this capability reads them and refuses to
-   * send them. See `ARMING_MODE_WIRE` for the per-value breakdown.
+   * push within ~5s of the write. Two more, `mode_type` 3 (custom1) and 2 (schedule), are also settable
+   * on the strength of a prior integration's live writes against this same account — see
+   * {@link ArmingMode}'s doc for why that counts despite this SDK's own capture never exercising them.
+   * The remaining three are named by the app but never observed leaving it in ANY integration, so this
+   * capability reads them and refuses to send them. See `ARMING_MODE_WIRE` for the per-value breakdown.
    */
   SET_ARMING: 1224,
   /**
@@ -96,7 +100,7 @@ export const ARMING_CMD = {
  *
  * The READ side is why all nine are here: a station set to a schedule reports 2, and a getter answering a
  * number nothing can name is worse than one naming a mode we cannot set. The WRITE side takes only the
- * four of {@link ArmingMode} — {@link SETTABLE_MODES} is that subset, derived from this table rather than
+ * five of {@link ArmingMode} — {@link SETTABLE_MODES} is that subset, derived from this table rather than
  * listed again.
  *
  * **The names and integers are the V6 app's own** (`SecurityGuardConstants`, mirrored by `GuardConstant`),
@@ -106,8 +110,8 @@ export const ARMING_CMD = {
  * ✅ WRITE WIRE-CAPTURED (byte-exact, a T8030 2026-07-23; all three re-confirmed live 2026-08-05, each
  * reporting its own MODE_SWITCH push within ~5s): `away` 0, `home` 1, `disarmed` 63.
  * ✅ WRITE CONFIRMED LIVE BY A PRIOR INTEGRATION (not this SDK's own capture, but the same account/
- * station, reflected correctly): `custom1` 3 — see {@link ArmingMode}'s doc.
- * ⚠️ WRITE NEVER CAPTURED BY EITHER: `schedule` 2, `custom2` 4, `custom3` 5, `off` 6, `geo` 47. The app
+ * station, reflected correctly): `schedule` 2, `custom1` 3 — see {@link ArmingMode}'s doc.
+ * ⚠️ WRITE NEVER CAPTURED BY EITHER: `custom2` 4, `custom3` 5, `off` 6, `geo` 47. The app
  * defines each, but no capture shows one leaving the app, so sending one would be a fire-and-forget write
  * that looks like success whatever the device does with it. Add the mode to {@link ArmingMode} (and flip
  * this note plus {@link ARMING_CMD.SET_ARMING}) as each is captured.
@@ -115,7 +119,7 @@ export const ARMING_CMD = {
 const ARMING_MODE_WIRE: Record<ArmingMode, number> & Record<string, number> = {
   away: 0,
   home: 1,
-  schedule: 2, // ⚠️ reportable, NOT settable — see the doc comment above
+  schedule: 2,
   custom1: 3,
   custom2: 4, // ⚠️ reportable, NOT settable — see the doc comment above
   custom3: 5, // ⚠️ reportable, NOT settable — see the doc comment above
@@ -270,9 +274,9 @@ export type ArmingActions = Surface<typeof ARMING_MEMBERS>;
 export const ARMING_MEMBERS = {
   /**
    * The one member whose write domain is NARROWER than its read: `enumValues` names all nine modes a
-   * station can report, and the argument's `values` publishes only the four confirmed settable. That
+   * station can report, and the argument's `values` publishes only the five confirmed settable. That
    * argument IS the domain the derived setter enforces and the refusal names, so an unconfirmed mode is
-   * refused by naming the four that work — nine labels for the read and four for the write, off one
+   * refused by naming the five that work — nine labels for the read and five for the write, off one
    * declaration.
    *
    * `armingCommand` may also throw synchronously (missing account identity) and `bindMembers` turns that
@@ -298,8 +302,8 @@ export const ARMING_MEMBERS = {
     args: [{ name: "mode", kind: "enum", values: SETTABLE_MODES }],
     description:
       "Guard mode (verified: param 1224 = GUARD_MODE, read/write mechanism confirmed). Reads all 9 modes " +
-      "the app defines; SETS only the 4 confirmed settable (away/home/custom1/disarmed) — " +
-      "schedule/custom2/custom3/off/geo are named by the app but no capture shows one being sent, " +
+      "the app defines; SETS only the 5 confirmed settable (away/home/schedule/custom1/disarmed) — " +
+      "custom2/custom3/off/geo are named by the app but no capture shows one being sent, " +
       "so they are refused rather than guessed; see ARMING_MODE_WIRE in arming.ts for the breakdown.",
     observation: {
       event: "armingModeChanged",
@@ -341,8 +345,8 @@ export const ARMING_MEMBERS = {
 
 /**
  * `arming` — guard/arming mode. `armingMode` (see {@link ARMING_CMD.SET_ARMING}) has a verified
- * read/write MECHANISM; 9 modes are reportable, but only 4 (away/home/custom1/disarmed) are confirmed
- * settable — see `ARMING_MODE_WIRE` for which 5 are still unconfirmed third-party integers.
+ * read/write MECHANISM; 9 modes are reportable, but only 5 (away/home/schedule/custom1/disarmed) are
+ * confirmed settable — see `ARMING_MODE_WIRE` for which 4 are still unconfirmed third-party integers.
  */
 export const ARMING: CapabilityModule = {
   capability: "arming",
