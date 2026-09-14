@@ -157,13 +157,20 @@ describe("arming capability module", () => {
       expect(push("not-a-number")).not.toHaveProperty("currentMode");
     });
 
-    it("still refreshes the mode member alongside the derived field", () => {
+    /**
+     * No `refresh` on this mapping — a host's emitSemantic holds an event back entirely until a
+     * declared refresh converges or throws, and on a schedule/geo policy `armingMode` never changes
+     * (it reads back the literal policy name forever), so a refresh watching for it to change can never
+     * converge on exactly the transitions this event exists to report. That silently dropped the event
+     * — currentMode included — on every schedule-driven switch. See the class doc.
+     */
+    it("carries no refresh, so the event is never held back waiting for one", () => {
       const [hit] = decodeEvent(
         { source: "push", eventType: CusPushEvent.MODE_SWITCH, deviceSn: "T8030P0000000000", payload: { mode: 1 } },
         new Set(["arming"]),
       );
       expect(hit.event).toBe("armingModeChanged");
-      expect(hit.refresh).toMatchObject({ param: ARMING_CMD.SET_ARMING, property: "armingMode" });
+      expect(hit.refresh).toBeUndefined();
       expect(hit.payload).toMatchObject({ currentMode: "home" });
     });
   });

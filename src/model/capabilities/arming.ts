@@ -363,23 +363,27 @@ export const ARMING: CapabilityModule = {
    * capability (see the barrel's event index).
    *
    * The alarm ids carry a static `phase` so one event name covers the whole lifecycle, the same shape
-   * `battery` uses for its threshold pushes. The mode-switch push refreshes the `mode` read rather than
-   * trusting a decoded field for the transition itself — but it also carries the push's own `mode`
-   * field, attached here as `currentMode`. That field is a DIFFERENT thing from `mode`/`armingMode`:
-   * when the station's policy is `schedule` or `geo`, `armingMode` reads back that literal policy name
-   * forever, never what the schedule has actually resolved to right now — a device set to a schedule
-   * cycling Home/Night would otherwise report nothing but "schedule" indefinitely. `currentMode` is
-   * this push's own resolved value at the moment of the switch, which is exactly the field a prior,
-   * separate integration used for this — its own push handling decoded and forwarded the identical
-   * field. Best-effort and UNCONFIRMED by this SDK's own capture session specifically for this
-   * semantic (see `mode`'s doc), so consume it accordingly.
+   * `battery` uses for its threshold pushes.
+   *
+   * MODE_SWITCH deliberately carries NO `refresh`. A host's `emitSemantic` holds an event back entirely
+   * until a declared refresh converges or throws — and on a `schedule`/`geo` policy, `armingMode` reads
+   * back that literal policy name FOREVER (it never resolves to a concrete mode), so a refresh watching
+   * for `mode` to change can never converge on exactly the transitions this event exists to report:
+   * measured live, every schedule-driven Home/Night switch made its own refresh throw
+   * `StateConvergenceError` after the full 20s timeout, and the host's emitSemantic swallows that as a
+   * reported error WITHOUT ever emitting the event — silently dropping every one of them, `currentMode`
+   * included. `currentMode` needs no such wait anyway: it is the push's own resolved value at the
+   * moment of the switch, which is exactly the field a prior, separate integration used for this — its
+   * own push handling decoded and forwarded the identical field. Best-effort and UNCONFIRMED by this
+   * SDK's own capture session specifically for this semantic (see `mode`'s doc), so consume it
+   * accordingly. `armingMode` itself still reaches a caller through its own normal poll cadence; it
+   * never depended on this event to stay fresh.
    */
   events: [
     {
       source: "push",
       match: CusPushEvent.MODE_SWITCH,
       emit: "armingModeChanged",
-      refresh: { member: "mode" },
       derive: (s) => {
         if (s.source !== "push") return {};
         const raw = s.payload?.["mode"];

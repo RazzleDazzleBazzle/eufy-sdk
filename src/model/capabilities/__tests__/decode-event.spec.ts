@@ -291,10 +291,11 @@ describe("decodeEvent — detection sub-events and station events", () => {
   });
 
   it("reports a guard-mode change and the alarm lifecycle", () => {
-    expect(push(9)[0]).toMatchObject({
-      event: "armingModeChanged",
-      refresh: { param: 1224, property: "armingMode", timeoutMs: 20_000 },
-    });
+    // No `refresh` on armingModeChanged: a host's emitSemantic holds an event back entirely until a
+    // declared refresh converges or throws, and on a schedule/geo policy armingMode never changes — so
+    // a refresh watching for it to change silently dropped the event on every such transition. See
+    // arming.ts's own doc for the measured evidence.
+    expect(push(9)[0]).toMatchObject({ event: "armingModeChanged", refresh: undefined });
     expect(push(10)[0]).toMatchObject({ event: "alarm", payload: { phase: "triggered" } });
     expect(push(16)[0]).toMatchObject({ event: "alarm", payload: { phase: "delayed" } });
   });
