@@ -195,14 +195,14 @@ describe("describeCapabilities — enumeration of the live bound objects", () =>
 
   /**
    * The read's set and the action's are separate answers on purpose: a station reports nine guard modes
-   * and can be SET to the three whose write was captured. Published together so a caller shows the current
+   * and can be SET to the four confirmed settable. Published together so a caller shows the current
    * mode from the labels and offers only what will be accepted — the same declaration the write itself is
    * checked against, so the offer cannot promise a refusal.
    */
   it("offers what an action accepts, not everything its read reports", () => {
     const arming = describeAll(allParams()).find((d) => d.capability === "arming")!;
     expect(arming.reads.find((r) => r.accessor === "mode")!.values).toEqual([0, 1, 2, 3, 4, 5, 6, 47, 63]);
-    expect(arming.actions.find((a) => a.name === "setMode")!.args![0].values).toEqual([0, 1, 63]);
+    expect(arming.actions.find((a) => a.name === "setMode")!.args![0].values).toEqual([0, 1, 3, 63]);
   });
 
   /** An action taking nothing SAYS so, so a caller can offer it as a plain button. */
