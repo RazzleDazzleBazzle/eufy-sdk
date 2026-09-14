@@ -281,7 +281,10 @@ export const ARMING_MEMBERS = {
    * The setter takes either vocabulary — see `armingModeOf` — because the getter answers the wire integer,
    * and a value a caller just read has to be one it can write back.
    *
-   * MODE_SWITCH carries no value. Live qualification on a standalone camera showed that authoritative
+   * MODE_SWITCH's own carried value (see `ARMING.events`'s `currentMode`) is the RESOLVED live mode,
+   * not necessarily this property's own policy value (`armingMode` reads back `schedule` itself, even
+   * while the push's value is whatever the schedule just resolved to) — so it is not trusted as this
+   * property's own readback. Live qualification on a standalone camera showed that authoritative
    * readback requires a bounded cloud-list refresh, and that its P2P session must be reset after
    * convergence before a following mode write; an attached device must never reset its shared HomeBase.
    */
@@ -356,9 +359,16 @@ export const ARMING: CapabilityModule = {
    * capability (see the barrel's event index).
    *
    * The alarm ids carry a static `phase` so one event name covers the whole lifecycle, the same shape
-   * `battery` uses for its threshold pushes. The mode-switch push is known to identify WHICH mode and
-   * what triggered the change, but neither has been observed on the wire here, so this emits the bare
-   * transition and refreshes the `mode` read rather than trusting a decoded field.
+   * `battery` uses for its threshold pushes. The mode-switch push refreshes the `mode` read rather than
+   * trusting a decoded field for the transition itself — but it also carries the push's own `mode`
+   * field, attached here as `currentMode`. That field is a DIFFERENT thing from `mode`/`armingMode`:
+   * when the station's policy is `schedule` or `geo`, `armingMode` reads back that literal policy name
+   * forever, never what the schedule has actually resolved to right now — a device set to a schedule
+   * cycling Home/Night would otherwise report nothing but "schedule" indefinitely. `currentMode` is
+   * this push's own resolved value at the moment of the switch, which is exactly the field a prior,
+   * separate integration used for this — its own push handling decoded and forwarded the identical
+   * field. Best-effort and UNCONFIRMED by this SDK's own capture session specifically for this
+   * semantic (see `mode`'s doc), so consume it accordingly.
    */
   events: [
     {
@@ -366,6 +376,12 @@ export const ARMING: CapabilityModule = {
       match: CusPushEvent.MODE_SWITCH,
       emit: "armingModeChanged",
       refresh: { member: "mode" },
+      derive: (s) => {
+        if (s.source !== "push") return {};
+        const raw = s.payload?.["mode"];
+        const wire = typeof raw === "number" ? raw : Number(raw);
+        return Number.isFinite(wire) && wire in ARMING_MODE_LABELS ? { currentMode: ARMING_MODE_LABELS[wire] } : {};
+      },
     },
     { source: "push", match: CusPushEvent.ALARM, emit: "alarm", payload: { phase: "triggered" } },
     { source: "push", match: CusPushEvent.ALARM_DELAY, emit: "alarm", payload: { phase: "delayed" } },

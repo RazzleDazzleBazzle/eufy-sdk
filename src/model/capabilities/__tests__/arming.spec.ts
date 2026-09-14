@@ -1,5 +1,6 @@
 import { ARMING, ARMING_CMD, ARMING_MEMBERS, ArmingMode, AlarmDelaySeconds, type ArmingActions } from "../arming.js";
-import { buildCommand } from "../index.js";
+import { buildCommand, decodeEvent } from "../index.js";
+import { CusPushEvent } from "../../push-events.js";
 import { bind } from "./bind.js";
 import type { CommandContext } from "../types.js";
 import type { Command } from "../../../core/contracts.js";
@@ -125,6 +126,45 @@ describe("arming capability module", () => {
       const { acts } = bind<ArmingActions>("arming", noIdentityCtx);
       await expect(acts.setMode(ArmingMode.home)).rejects.toThrow(/missing account identity/);
       expect(() => buildCommand("armingMode", "home", noIdentityCtx)).toThrow(/missing account identity/);
+    });
+  });
+
+  /**
+   * `currentMode` is the schedule/geo resolution gap: `armingMode` reads back the POLICY name forever
+   * (literally "schedule"), never what a schedule has actually resolved to. The MODE_SWITCH push itself
+   * carries the resolved value in its own `mode` field — attached here as `currentMode` so a caller
+   * doesn't have to duplicate ARMING_MODE_WIRE just to read it.
+   */
+  describe("currentMode (the push's own resolved value, distinct from the armingMode policy)", () => {
+    const push = (mode: unknown) =>
+      decodeEvent(
+        { source: "push", eventType: CusPushEvent.MODE_SWITCH, deviceSn: "T8030P0000000000", payload: { mode } },
+        new Set(["arming"]),
+      )[0].payload;
+
+    it.each([
+      [0, "away"],
+      [1, "home"],
+      [3, "custom1"],
+      [2, "schedule"],
+      [63, "disarmed"],
+    ])("resolves push mode %i to currentMode %s", (wire, label) => {
+      expect(push(wire)).toMatchObject({ currentMode: label });
+    });
+
+    it("omits currentMode when the push carries no usable mode", () => {
+      expect(push(undefined)).not.toHaveProperty("currentMode");
+      expect(push("not-a-number")).not.toHaveProperty("currentMode");
+    });
+
+    it("still refreshes the mode member alongside the derived field", () => {
+      const [hit] = decodeEvent(
+        { source: "push", eventType: CusPushEvent.MODE_SWITCH, deviceSn: "T8030P0000000000", payload: { mode: 1 } },
+        new Set(["arming"]),
+      );
+      expect(hit.event).toBe("armingModeChanged");
+      expect(hit.refresh).toMatchObject({ param: ARMING_CMD.SET_ARMING, property: "armingMode" });
+      expect(hit.payload).toMatchObject({ currentMode: "home" });
     });
   });
 
