@@ -55,6 +55,9 @@ describe("SharedLiveSource — reporting a failed start", () => {
   });
 
   it("keeps the warm-up bounded until a keyframe arrives", () => {
+    // The deadline still fires at 6000ms even though video showed up early — but `attempts` stops climbing
+    // the moment that delta frame arrives: re-issuing the start further would only re-assert an already-served
+    // channel (see `reissueStart`'s doc comment), so the single start already sent is the only attempt made.
     const { source, onStartFailed, streams } = mk();
     const errors: Error[] = [];
     source.attach().on("error", (error) => errors.push(error));
@@ -66,7 +69,7 @@ describe("SharedLiveSource — reporting a failed start", () => {
       reason: "warm-timeout",
       stage: "awaiting-keyframe",
       timeoutMs: 6000,
-      attempts: 3,
+      attempts: 1,
     });
     expect(onStartFailed).toHaveBeenCalledTimes(1);
     expect(source.state).toBe("stopped");

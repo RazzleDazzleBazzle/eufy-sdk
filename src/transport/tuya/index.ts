@@ -7,7 +7,7 @@
  *
  * Quick start:
  *
- *   import { tuya } from "@mega-yfue/eufy-sdk";
+ *   import { tuya } from "@razzledazzlebazzle/eufy-sdk";
  *   const client = new tuya.TuyaClient();           // zero-config
  *   await client.login(eufyUserId, phoneCode);       // derives Tuya account + logs in
  *   const dps = await client.getDeviceDps(devId);   // read DPs with the live sid

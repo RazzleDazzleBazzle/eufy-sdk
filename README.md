@@ -12,10 +12,10 @@
 
 **One typed client for the whole Anker eufy ecosystem — devices, realtime events, and live media.**
 
-[![npm](https://img.shields.io/npm/v/@mega-yfue/eufy-sdk?logo=npm&color=cb3837)](https://www.npmjs.com/package/@mega-yfue/eufy-sdk)
+[![npm](https://img.shields.io/npm/v/@razzledazzlebazzle/eufy-sdk?logo=npm&color=cb3837)](https://www.npmjs.com/package/@razzledazzlebazzle/eufy-sdk)
 [![CI](https://github.com/mega-yfue/eufy-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/mega-yfue/eufy-sdk/actions/workflows/ci.yml)
-[![node](https://img.shields.io/node/v/@mega-yfue/eufy-sdk?logo=nodedotjs)](./.nvmrc)
-[![license](https://img.shields.io/npm/l/@mega-yfue/eufy-sdk)](./LICENSE)
+[![node](https://img.shields.io/node/v/@razzledazzlebazzle/eufy-sdk?logo=nodedotjs)](./.nvmrc)
+[![license](https://img.shields.io/npm/l/@razzledazzlebazzle/eufy-sdk)](./LICENSE)
 
 [Documentation](https://mega-yfue.github.io/) · [Contributing](./CONTRIBUTING.md) · [Changelog](./CHANGELOG.md)
 
@@ -55,8 +55,8 @@ code path and an unlisted or future device resolves the same way as a known one.
 ## Install
 
 ```bash
-npm install @mega-yfue/eufy-sdk         # latest stable
-npm install @mega-yfue/eufy-sdk@beta    # the prerelease of the version in review
+npm install @razzledazzlebazzle/eufy-sdk         # latest stable
+npm install @razzledazzlebazzle/eufy-sdk@beta    # the prerelease of the version in review
 ```
 
 **Node.js ≥ 24.5.0** is required, not just recommended (see [`.nvmrc`](./.nvmrc)). `ffmpeg` is

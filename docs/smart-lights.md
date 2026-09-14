@@ -52,7 +52,7 @@ An effect is chosen by its **catalogue id**. The catalogue is account/region-sco
 device), so you browse it with a standalone helper, passing the session's HTTP client from `eufy.api`:
 
 ```ts
-import { listLightEffects } from "@mega-yfue/eufy-sdk";
+import { listLightEffects } from "@razzledazzlebazzle/eufy-sdk";
 
 const effects = await listLightEffects(eufy.api);
 // → [{ lightId: 10474, name: "Presidents Day", colors: "ff0000|…", buildable: true }, …]
@@ -88,7 +88,7 @@ resource — they come back as names only, with no `lightId`, so they can't curr
 `setEffect`. List them for display:
 
 ```ts
-import { listAiSceneRecommendations } from "@mega-yfue/eufy-sdk";
+import { listAiSceneRecommendations } from "@razzledazzlebazzle/eufy-sdk";
 
 const scenes = await listAiSceneRecommendations(eufy.api);
 // → ["Enchanting Starry Night", "Moonlit Serenity", …]

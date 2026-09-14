@@ -214,6 +214,22 @@ describe("SharedLiveSource", () => {
     expect(last().nudged).toBe(at);
   });
 
+  it("stops the warm-retry as soon as a non-keyframe frame arrives, not only on the keyframe", () => {
+    // A HomeBase-attached camera's `nudge` is a full media-start re-assert, not a keepalive ping — once the
+    // station is demonstrably already serving this channel (any video/audio, keyframe or not), re-issuing it
+    // on a fixed clock only restarts the encoder's own run-up to its next keyframe. Regression coverage for
+    // that: a real capture showed the retry re-asserting every 2s straight through P-frames already arriving,
+    // stalling the very keyframe it was "helping" reach.
+    const { source, last } = mk({ warmRetryMs: 2000, warmTimeoutMs: 20000 });
+    source.attach();
+    vi.advanceTimersByTime(2000);
+    expect(last().nudged).toBe(1);
+    last().video(frame(false));
+    const at = last().nudged;
+    vi.advanceTimersByTime(10000);
+    expect(last().nudged).toBe(at);
+  });
+
   it("stalls: emits error to consumers and tears down when no keyframe arrives in the warm window", () => {
     const { source, last } = mk({ warmRetryMs: 2000, warmTimeoutMs: 6000 });
     const c = source.attach();

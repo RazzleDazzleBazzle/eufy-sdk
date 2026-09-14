@@ -11,7 +11,7 @@ You construct **one `EufyMega` per account**. It's the facade over everything el
 list, the realtime channels, and the unified event stream.
 
 ```ts
-import { EufyMega } from "@mega-yfue/eufy-sdk";
+import { EufyMega } from "@razzledazzlebazzle/eufy-sdk";
 
 const eufy = new EufyMega({ email, password, region: "eu", store });
 ```
@@ -68,7 +68,7 @@ for capabilities it has, and each returns `undefined` until the device is bound 
 the two optional links:
 
 ```ts
-import { PtzDirection } from "@mega-yfue/eufy-sdk";
+import { PtzDirection } from "@razzledazzlebazzle/eufy-sdk";
 
 await dev.camera?.()?.on();
 await dev.ptz?.()?.rotate(PtzDirection.left, 1.0);

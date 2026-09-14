@@ -40,7 +40,7 @@ the expected captcha / 2FA flow; step through it until authenticated. A restored
 straight to `LoginStatus.Ok` with no network.
 
 ```ts
-import { EufyMega, FileSessionStore, LoginStatus } from "@mega-yfue/eufy-sdk";
+import { EufyMega, FileSessionStore, LoginStatus } from "@razzledazzlebazzle/eufy-sdk";
 
 const eufy = new EufyMega({
   email: "you@example.com",
@@ -107,7 +107,7 @@ The client is **silent by default** — it emits diagnostics only through a `log
 them to the console (the equivalent of a verbose "debug" mode), attach the built-in `ConsoleLogger`:
 
 ```ts
-import { EufyMega, ConsoleLogger } from "@mega-yfue/eufy-sdk";
+import { EufyMega, ConsoleLogger } from "@razzledazzlebazzle/eufy-sdk";
 
 const eufy = new EufyMega({ email, password, logger: new ConsoleLogger() }); // verbose
 // or gate by severity:

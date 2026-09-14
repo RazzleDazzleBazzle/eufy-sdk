@@ -48,7 +48,7 @@ eufy.on("deviceCapabilities", ({ deviceSn, gained }) => console.log(deviceSn, "g
 :::
 
 ```ts
-import { PtzDirection, ArmingMode } from "@mega-yfue/eufy-sdk";
+import { PtzDirection, ArmingMode } from "@razzledazzlebazzle/eufy-sdk";
 
 await dev.camera?.()?.on(); // power on
 const stored = await dev.camera?.()?.snapshotStored?.(); // → Buffer; latest retained push JPEG

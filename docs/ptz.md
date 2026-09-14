@@ -14,7 +14,7 @@ if (!ptz) throw new Error("not a PTZ camera");
 Movement is **command-driven** — the camera has no "go to angle X" write; it steps in a direction.
 
 ```ts
-import { PtzDirection } from "@mega-yfue/eufy-sdk";
+import { PtzDirection } from "@razzledazzlebazzle/eufy-sdk";
 
 await ptz.rotate(PtzDirection.left, 1.0); // step in a direction (optional zoom factor)
 await ptz.left(); // shorthands: left / right / up / down

@@ -11,7 +11,7 @@ MQTT, P2P, push, live media), each line prefixed by subsystem (`[mega]` / `[smqt
 `[push]` / `[fcm]` / `[live]`):
 
 ```ts
-import { EufyMega, ConsoleLogger } from "@mega-yfue/eufy-sdk";
+import { EufyMega, ConsoleLogger } from "@razzledazzlebazzle/eufy-sdk";
 
 const eufy = new EufyMega({ email, password, region: "eu", logger: new ConsoleLogger() });
 // or gate by severity — warnings and errors only:
@@ -80,7 +80,7 @@ eufy.on("sessionExpired", async () => {
   under `LIVE_TRACE_MESSAGE` with a `LiveTrace` payload, and **both are exported from the package root**:
 
   ```ts
-  import { LIVE_TRACE_MESSAGE, type LiveTrace } from "@mega-yfue/eufy-sdk";
+  import { LIVE_TRACE_MESSAGE, type LiveTrace } from "@razzledazzlebazzle/eufy-sdk";
   ```
 
   A host that bounds or redacts what it retains should key its phase allowlist off the union, so a phase

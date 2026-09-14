@@ -235,7 +235,7 @@ there is no automatic stored-to-live fallback.
 ### Stored: passive retained push JPEG
 
 ```ts
-import { StoredSnapshotUnavailableError } from "@mega-yfue/eufy-sdk";
+import { StoredSnapshotUnavailableError } from "@razzledazzlebazzle/eufy-sdk";
 
 try {
   const jpeg: Buffer = await cam.snapshotStored!();

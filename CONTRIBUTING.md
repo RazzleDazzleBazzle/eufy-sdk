@@ -132,7 +132,7 @@ Three things worth knowing before you cut one:
 - **The tag decides the version, not `package.json`.** `v1.2.3` publishes 1.2.3 whatever the file
   says. `npm version` computes the next number from the file, though, so `patch` on a file that
   drifted behind the registry gives a version that is already taken. If you doubt it, resync first
-  with `npm pkg set version="$(npm view @mega-yfue/eufy-sdk version)"`.
+  with `npm pkg set version="$(npm view @razzledazzlebazzle/eufy-sdk version)"`.
 - **A failed release burns its number, permanently.** Immutable releases mean a tag that has ever
   belonged to a release can never be reused, even after deleting both. Never retry a release on the
   same version — fix forward and bump.

@@ -1,6 +1,6 @@
 {
-  "name": "@mega-yfue/eufy-sdk",
-  "version": "0.1.1",
+  "name": "@razzledazzlebazzle/eufy-sdk",
+  "version": "0.1.2",
   "description": "One typed TypeScript client for the Anker eufy v6 cloud — capability-driven devices, realtime events over P2P/MQTT/push, and live media",
   "license": "Apache-2.0",
   "author": "mega-yfue",
@@ -25,13 +25,13 @@
     "typescript",
     "sdk"
   ],
-  "homepage": "https://mega-yfue.github.io/",
+  "homepage": "https://github.com/RazzleDazzleBazzle/eufy-sdk",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mega-yfue/eufy-sdk.git"
+    "url": "git+https://github.com/RazzleDazzleBazzle/eufy-sdk.git"
   },
   "bugs": {
-    "url": "https://github.com/mega-yfue/eufy-sdk/issues"
+    "url": "https://github.com/RazzleDazzleBazzle/eufy-sdk/issues"
   },
   "type": "module",
   "main": "dist/index.js",
@@ -51,6 +51,7 @@
   "scripts": {
     "prebuild": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "tsc -p tsconfig.build.json && node scripts/bundle.mjs",
+    "prepare": "npm run build",
     "dev": "tsc -p tsconfig.build.json --watch",
     "typecheck": "tsc --noEmit",
     "typecheck:examples": "tsc -p examples/tsconfig.json",

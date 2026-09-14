@@ -80,9 +80,16 @@ export interface SharedLiveSourceOptions {
   /** Rolling prebuffer window in seconds, 0 = off (default 0). */
   preBufferSeconds?: number;
   /**
-   * Warm-up start retry interval (default 2000ms). After warming, if no keyframe has arrived, the source
-   * re-issues the start ({@link LiveStreamHandle.nudge}) every interval — self-healing a start that
-   * raced the level-2 key negotiation, independent of any caller keepalive.
+   * Warm-up start retry interval (default 2000ms). While NOTHING has arrived yet, the source re-issues
+   * the start ({@link LiveStreamHandle.nudge}) every interval — self-healing a start that raced the
+   * level-2 key negotiation, independent of any caller keepalive.
+   *
+   * Stops the moment video or audio arrives, even without a keyframe yet: on a HomeBase-attached camera
+   * {@link LiveStreamHandle.nudge} is not a ping but a full media-start re-assert (see live-stream.ts's
+   * `settleKeepalive`), and once the station is demonstrably already serving this channel, re-asserting
+   * it on a fixed clock only restarts the encoder's own run-up to its next keyframe — the exact
+   * contention `settleKeepalive` exists to avoid, just from an independent ticker it doesn't know about.
+   * The warm-up deadline is what still bounds the wait for that keyframe.
    */
   warmRetryMs?: number;
   /**
@@ -617,17 +624,25 @@ export class SharedLiveSource {
    * then a keepalive holding a stream that was never started. Nothing arriving since this watch was armed, across
    * more than one re-issue, is this source's own evidence that the channel is not being served — see
    * {@link fruitlessReissues} for why one is not enough and why what the stream delivered earlier is not
-   * evidence. Once media arrives the keepalive is what is wanted, and an attached camera re-sends a full start
-   * either way.
+   * evidence.
+   *
+   * Once video or audio has arrived, this stops re-issuing rather than switching to a "keepalive" nudge: on an
+   * attached camera there IS no keepalive variant, only a full restart (see {@link warmRetryMs}), so calling
+   * `nudge` here at all past that point would just be the station-contention `settleKeepalive` already fixed,
+   * from a ticker that doesn't check its state. The keyframe is left to arrive on its own cadence, bounded by
+   * the warm-up deadline.
    */
   private reissueStart(): void {
     const current = this.stream;
     if (!current?.nudge) return;
-    this.warmAttempts++;
     const arrivedSinceWatch = this.delivered.video || this.delivered.audio;
-    if (arrivedSinceWatch) this.fruitlessReissues = 0;
-    else this.fruitlessReissues++;
-    current.nudge(!arrivedSinceWatch && this.fruitlessReissues > 1);
+    if (arrivedSinceWatch) {
+      this.fruitlessReissues = 0;
+      return;
+    }
+    this.warmAttempts++;
+    this.fruitlessReissues++;
+    current.nudge(this.fruitlessReissues > 1);
   }
 
   /**

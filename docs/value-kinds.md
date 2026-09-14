@@ -88,7 +88,7 @@ If you would rather branch on it explicitly, `isKnownValueKind` narrows a kind t
 models, and `KNOWN_VALUE_KINDS` is that set as data:
 
 ```ts
-import { isKnownValueKind, KNOWN_VALUE_KINDS } from "@mega-yfue/eufy-sdk";
+import { isKnownValueKind, KNOWN_VALUE_KINDS } from "@razzledazzlebazzle/eufy-sdk";
 
 if (!isKnownValueKind(kind)) log(`unmodelled kind ${kind} — showing the raw value`);
 ```

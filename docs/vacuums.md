@@ -90,7 +90,7 @@ it can't rely on this getter to do it.
 ## Suction
 
 ```ts
-import { suctionLevelName } from "@mega-yfue/eufy-sdk";
+import { suctionLevelName } from "@razzledazzlebazzle/eufy-sdk";
 
 const level = dev.suction()?.level; // raw integer
 suctionLevelName(level); // "Quiet" | "Standard" | "Turbo" | "Max" | "BoostIQ" | "MaxPro" | undefined
