@@ -1449,6 +1449,12 @@ export class EufyMega extends EventEmitter {
    * an unchanged VALUE, which is no state change to report but is fresh proof the device is alive. A
    * device absent from the previous pass is skipped — first sight is discovery, not a transition;
    * {@link deviceState} answers an initial reading.
+   *
+   * Finally emits `pollOk` unconditionally, once the pass completes without throwing — regardless of
+   * whether anything was added, removed, changed, or re-reported. `deviceState` cannot stand in for this:
+   * a fleet with nothing new to report (an overnight lull) produces a perfectly healthy pass with zero
+   * `deviceState` emissions, which is exactly the case a poll-loop liveness check needs to tell apart from
+   * a pass that never ran at all.
    */
   private async pollOnce(): Promise<void> {
     try {
@@ -1461,6 +1467,7 @@ export class EufyMega extends EventEmitter {
           this.emitSemantic(out.event, out.payload, { refresh: out.refresh });
       for (const dev of diff.reported) this.emit("deviceState", this.stateOf(dev));
       for (const change of diff.params) await this.widenCapabilities(change.deviceSn);
+      this.emit("pollOk");
     } catch (e) {
       this.reportError(e);
     }

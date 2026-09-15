@@ -384,6 +384,34 @@ describe("cloud-param poll loop", () => {
     expect(seen).toEqual([]);
   });
 
+  it("emits pollOk on a healthy pass even when nothing changed — the liveness signal deviceState can't provide", async () => {
+    const eufy = makeClient();
+    vi.spyOn((eufy as any).registry, "pollChanges").mockResolvedValue({
+      params: [],
+      added: [],
+      removed: [],
+      reported: [],
+    });
+    let pollOkCount = 0;
+    eufy.on("pollOk", () => pollOkCount++);
+
+    await (eufy as any).pollOnce();
+
+    expect(pollOkCount).toBe(1);
+  });
+
+  it("does not emit pollOk when the pass throws", async () => {
+    const eufy = makeClient();
+    vi.spyOn((eufy as any).registry, "pollChanges").mockRejectedValue(new Error("cloud down"));
+    eufy.on("error", () => {}); // swallow — asserted elsewhere
+    let pollOkCount = 0;
+    eufy.on("pollOk", () => pollOkCount++);
+
+    await (eufy as any).pollOnce();
+
+    expect(pollOkCount).toBe(0);
+  });
+
   it("re-arms after each run, so the loop keeps polling", async () => {
     const eufy = makeClient({ pollMs: 1000 });
     const poll = vi

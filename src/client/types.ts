@@ -311,6 +311,15 @@ export type EufyMegaEventMap = {
    */
   deviceState: [state: DeviceState];
   /**
+   * A cloud poll pass completed without throwing — fired every pass, independent of whether anything
+   * reported, changed, or moved. `deviceState` is NOT that signal: it fires only for a device whose
+   * `lastSeenMs` advanced, so a genuinely healthy but uneventful pass (an account with nothing new to
+   * report — an overnight lull, a fleet of quiet battery devices) produces no `deviceState` at all. A
+   * host using device activity as a liveness/watchdog proxy for "is the poll loop itself still running"
+   * needs THIS event, not that one — see {@link EufyMega}'s poll loop.
+   */
+  pollOk: [];
+  /**
    * A verified vendor-wire availability observation. Duplicate states are coalesced; silence,
    * `lastSeenMs`, operation failure and transport lifecycle never emit or clear this event.
    */
