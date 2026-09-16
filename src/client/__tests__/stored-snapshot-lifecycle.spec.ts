@@ -4,7 +4,7 @@ import type { EufyDevice } from "../../core/types.js";
 import type { ThumbnailCandidate } from "../../transport/push/types.js";
 import { LoginStatus, type LoginResult } from "../../transport/http/mega-client.js";
 import { EufyMega } from "../eufy-mega.js";
-import { LiveSnapshotUnavailableError } from "../../core/contracts.js";
+import { LiveSnapshotUnavailableError, StationBusyError } from "../../core/contracts.js";
 
 const CAMERA_SN = "T8000P0000000001";
 const UNKNOWN_SN = "T8000P0000000002";
@@ -291,5 +291,40 @@ describe("a live still that could not be captured", () => {
 
     expect(still.width).toBe(2560);
     expect(still.retained).toBeUndefined();
+  });
+});
+
+/**
+ * The OTHER way a live still is refused: a sibling camera on the same HomeBase already holds the
+ * station for a continuous viewer (StationBusyError), not merely no keyframe within the window
+ * (LiveSnapshotUnavailableError). Same contract either way — a still yields to the retained bytes
+ * rather than propagating the refusal, per StationBusyError's own doc.
+ */
+describe("a live still refused by StationBusyError (sibling holds the station)", () => {
+  const refuse = (internals: ClientInternals) =>
+    vi.spyOn(internals.p2p, "mediaProviderFor").mockReturnValue({
+      snapshotLive: () => Promise.reject(new StationBusyError(0)),
+    } as never);
+
+  it("answers the retained bytes, marked as retained", async () => {
+    const { eufy, internals, download } = makeClient();
+    download.mockResolvedValue(jpegOf(1920, 1080));
+    await eufy.login();
+    await internals.observeStoredImage(exactCandidate());
+    await vi.waitFor(() => expect(internals.mediaProviderFor(CAMERA_SN).snapshotStored!()).resolves.toBeDefined());
+    refuse(internals);
+
+    const still = await internals.mediaProviderFor(CAMERA_SN).snapshotLive();
+
+    expect(still).toMatchObject({ width: 1920, height: 1080, retained: true });
+    expect(still.jpeg.equals(jpegOf(1920, 1080))).toBe(true);
+  });
+
+  it("lets the refusal stand when nothing is retained", async () => {
+    const { eufy, internals } = makeClient();
+    await eufy.login();
+    refuse(internals);
+
+    await expect(internals.mediaProviderFor(CAMERA_SN).snapshotLive()).rejects.toBeInstanceOf(StationBusyError);
   });
 });

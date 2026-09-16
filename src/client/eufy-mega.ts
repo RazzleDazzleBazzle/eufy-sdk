@@ -51,6 +51,7 @@ import {
   commandObservation,
   LiveSnapshotUnavailableError,
   StateConvergenceError,
+  StationBusyError,
   type Command,
   type CommandObservation,
   type CommandSink,
@@ -1081,12 +1082,18 @@ export class EufyMega extends EventEmitter {
         try {
           return await media.snapshotLive(opts);
         } catch (error) {
-          if (!(error instanceof LiveSnapshotUnavailableError)) throw error;
+          // StationBusyError is the OTHER way a live still fails to capture: a sibling camera on the
+          // same HomeBase already holds the station for a continuous viewer. The class's own doc says
+          // a still yields rather than being refused — this is that promise, actually kept. Without it,
+          // a still that merely lost the race for a shared station propagated as a bare error instead of
+          // falling back like every other unavailable-live-still case does.
+          if (!(error instanceof LiveSnapshotUnavailableError) && !(error instanceof StationBusyError)) throw error;
           const retained = await retainedStill().catch(() => undefined);
           const geometry = retained && jpegGeometry(retained);
           if (!retained || !geometry) throw error;
+          const reason = error instanceof LiveSnapshotUnavailableError ? error.reason : "station-busy";
           (this.opts.logger ?? noopLogger).debug(
-            `[media] a live still was unavailable (${error.reason}) — answering the retained one instead`,
+            `[media] a live still was unavailable (${reason}) — answering the retained one instead`,
           );
           return { jpeg: retained, ...geometry, retained: true };
         }
