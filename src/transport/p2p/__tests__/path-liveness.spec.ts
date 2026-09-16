@@ -58,9 +58,9 @@ describe("a session's path liveness", () => {
     expect(built.pathAnswering).toBe(true);
   });
 
-  it("answers that a path silent past three heartbeats is not", () => {
+  it("answers that a path silent past ten heartbeats is not", () => {
     const { built, internals } = session();
-    internals.lastPongAt = Date.now() - 16_000;
+    internals.lastPongAt = Date.now() - 51_000;
     expect(built.pathAnswering).toBe(false);
   });
 
@@ -71,7 +71,7 @@ describe("a session's path liveness", () => {
 
   it("states the silence once, rather than on every heartbeat", () => {
     const { built, internals, debug } = session();
-    internals.lastPongAt = Date.now() - 16_000;
+    internals.lastPongAt = Date.now() - 51_000;
     void built.pathAnswering;
     void built.pathAnswering;
     const stale = traces(debug).filter((t) => (t as { phase: string }).phase === "path-stale");

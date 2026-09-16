@@ -64,10 +64,15 @@ const HEARTBEAT_MS = 5_000;
 /**
  * How long a path may go without answering a heartbeat before it stops being committed to.
  *
- * Three heartbeats. The station answers every PING, so one missed answer is a lost datagram and three is the
- * path being gone.
+ * Ten heartbeats, matching `eufy-security-client`'s own `MAX_RETRIES` (10) at the same 5s interval — the
+ * older, longer-established client for this exact same P2P protocol and hardware tolerates a full 50s of
+ * silence before declaring a station's connection lost. This SDK previously used three (15s), which is
+ * needlessly stricter than a policy already proven safe for years against the same devices: at three
+ * heartbeats, an ordinary transient gap (a brief Wi-Fi hiccup, a station momentarily busy) reads as a dead
+ * path and forces a full session rebuild — tearing down every sibling camera's live source sharing that
+ * station (see `tearDownStation`) — for a silence the old client would have shrugged off.
  */
-const PATH_SILENCE_MS = HEARTBEAT_MS * 3;
+const PATH_SILENCE_MS = HEARTBEAT_MS * 10;
 const LOOKUP_RETRY_MS = 1_000;
 const CONNECT_TIMEOUT_MS = 15_000;
 /**
