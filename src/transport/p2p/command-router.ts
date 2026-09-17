@@ -22,7 +22,6 @@ import type {
   AbortableCall,
   TalkbackHandle,
 } from "../../core/contracts.js";
-import { StationBusyError } from "../../core/contracts.js";
 import { noopLogger, type Logger } from "../../core/logger.js";
 import { assertNever } from "../../core/util.js";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -219,6 +218,13 @@ export class P2PCommandRouter {
   /** The options each live source was built from, so a later caller's conflicting ones can be reported. */
   private readonly liveSourceOpts = new Map<string, SharedLiveOpts>();
   /**
+   * Extra, independent P2P sessions opened for a camera whose station's shared session was already
+   * carrying a sibling's live view — keyed the same as {@link liveSources} (`${parentSn}:${channel}`).
+   * NOT tracked by {@link manager}: see {@link openDedicatedMediaSession}'s doc for why, and for the
+   * upstream commit this reimplements.
+   */
+  private readonly dedicatedSessions = new Map<string, P2PSession>();
+  /**
    * The open talkback per `${parentSn}:${channel}`, if any. The device plays one audio stream at a
    * time and the session carries one audio sequence, so this path is exclusive where a live pull is
    * shared — see {@link P2PCommandRouter.openTalkback}.
@@ -341,23 +347,62 @@ export class P2PCommandRouter {
    */
   private async openStation(parentSn: string): Promise<P2PSession> {
     return this.manager.acquire(parentSn, async (register) => {
-      const stationDev = this.recordFor(parentSn);
-      if (!stationDev) throw new Error(`station ${parentSn} is not in the device list`);
-      const raw = (stationDev.raw ?? {}) as Record<string, any>;
-      const did = (stationDev.p2pDid ?? raw.p2p_did) as string | undefined;
-      if (!did) throw new Error(`no P2P endpoint (p2p_did) for station ${parentSn}`);
-      let dskKey: string | undefined;
-      try {
-        dskKey = (await this.deps.mega.getDskKeys([parentSn]))[parentSn]?.dskKey;
-      } catch (e) {
-        this.deps.onError(e instanceof Error ? e : new Error(String(e)));
-      }
-      const localAddress = this.deps.localAddresses?.[parentSn] ?? freshestLanIp(raw);
-      const session = this.makeSession(parentSn, did, raw, dskKey, localAddress);
+      const session = await this.buildSessionFor(parentSn);
       register(session);
       await session.connect();
       return session;
     });
+  }
+
+  /**
+   * Resolve a station's record and build (not yet connected) a fresh {@link P2PSession} for it — the
+   * construction half of {@link openStation}, factored out so {@link openDedicatedMediaSession} can
+   * build an independent session the same way without going through {@link manager}'s one-per-station
+   * dedup.
+   */
+  private async buildSessionFor(parentSn: string): Promise<P2PSession> {
+    const stationDev = this.recordFor(parentSn);
+    if (!stationDev) throw new Error(`station ${parentSn} is not in the device list`);
+    const raw = (stationDev.raw ?? {}) as Record<string, any>;
+    const did = (stationDev.p2pDid ?? raw.p2p_did) as string | undefined;
+    if (!did) throw new Error(`no P2P endpoint (p2p_did) for station ${parentSn}`);
+    let dskKey: string | undefined;
+    try {
+      dskKey = (await this.deps.mega.getDskKeys([parentSn]))[parentSn]?.dskKey;
+    } catch (e) {
+      this.deps.onError(e instanceof Error ? e : new Error(String(e)));
+    }
+    const localAddress = this.deps.localAddresses?.[parentSn] ?? freshestLanIp(raw);
+    return this.makeSession(parentSn, did, raw, dskKey, localAddress);
+  }
+
+  /**
+   * Open an independent, unshared P2P session to a station whose own shared session is already
+   * carrying a sibling camera's live view.
+   *
+   * A HomeBase answers whichever media-start it heard MOST RECENTLY on a given connection, so two
+   * attached cameras sharing one session can only take turns — the station was never actually limited
+   * to one camera, one CONNECTION was. Giving the second camera its own session lets the base serve
+   * both at full rate instead of alternating. This is a from-scratch reimplementation, against our own
+   * codebase, of the same idea eufy-sdk's upstream (mega-yfue/eufy-sdk) landed on its `beta-0.2.0`
+   * branch in commit `eab46f44` ("serve several cameras on a station at once, a connection each",
+   * PR #168) — adopted as our own code rather than cherry-picked because that branch also carries ~90
+   * unrelated commits (Solix, vacuum, display, arming work) that would need a full rebase to take
+   * cleanly. If/when mega-yfue promotes that work to a stable release we consume, this method, its call
+   * sites in {@link sharedLiveSourceFor} and {@link dropLiveSource}, and {@link dedicatedSessions} should
+   * be removed in favour of theirs — search this codebase for `eab46f44` to find every touchpoint.
+   *
+   * Deliberately NOT tracked by {@link manager} (which dedupes to exactly one session per station
+   * serial): this is a private, single-purpose connection for one camera's live pull alone, owned and
+   * closed by whoever created it rather than reused across callers or governed by the station's own
+   * power-tier idle rules. An unreachable dedicated session is not retried — same as the shared
+   * session already is for any HomeBase-attached camera, per {@link replaceUnreachableSession}'s own
+   * doc — so this needed no change there.
+   */
+  private async openDedicatedMediaSession(parentSn: string): Promise<P2PSession> {
+    const session = await this.buildSessionFor(parentSn);
+    await session.connect();
+    return session;
   }
 
   /**
@@ -704,11 +749,13 @@ export class P2PCommandRouter {
    * Several cameras behind one station each get their own source: the station tags every media frame with the
    * camera it belongs to, and {@link LiveStream} takes only its own.
    *
-   * Whether they can be SERVED at the same time is the station's business, not this map's. Where it serves one
-   * camera at a time, a pull still lingering for a camera nobody is watching would go on re-issuing its own
-   * media start against the one being asked for, so opening a new channel releases those first — see
-   * {@link releaseLingeringSiblings}. A pull with consumers is never touched. The release runs before the
-   * reuse branch, so a reuse frees the station as a cold start does.
+   * They CAN be served at the same time: the station's own shared session carries one camera's live
+   * pull at most, but a sibling asked for while that one is occupied is given its own connection
+   * instead of being refused — see {@link openDedicatedMediaSession}. A pull merely LINGERING with no
+   * consumers doesn't count as occupying anything, so opening a new channel releases those first rather
+   * than paying for a second connection a released one would have made unnecessary — see
+   * {@link releaseLingeringSiblings}. A pull with consumers is never touched by that release. It runs
+   * before the reuse branch, so a reuse frees the station as a cold start does.
    *
    * The session goes into a {@link HeldSession} cell, so it can be replaced under a source that stays in
    * place.
@@ -726,41 +773,53 @@ export class P2PCommandRouter {
       source = undefined;
     }
     this.releaseLingeringSiblings(parentSn, channel);
-    if (homeBaseAttached) {
-      const serving = this.occupiedSiblingChannel(parentSn, key);
-      if (serving !== undefined) throw new StationBusyError(serving);
-    }
-    if (!source) {
-      const logger = this.deps.logger ?? noopLogger;
-      const held: HeldSession = { session };
-      source = new SharedLiveSource({
-        makeStream: (ctx) =>
-          new LiveStream(held.session, {
-            channel,
-            accountId,
-            homeBaseAttached,
-            eccPrivateKey: opts.eccPrivateKey,
-            keepAliveMs: opts.keepAliveMs,
-            reassertWanted: ctx.reassertWanted,
-            logger,
-          }),
-        lingerMs: opts.lingerMs,
-        preBufferSeconds: opts.preBufferSeconds,
-        powered: opts.powered,
-        batteryBudgetMs: opts.batteryBudgetMs,
-        budgetGraceMs: opts.budgetGraceMs,
-        logger,
-        label: key,
-        onActive: () => this.manager.retain(parentSn),
-        onIdle: () => this.manager.release(parentSn),
-        onStartFailed: () => this.onLiveStartFailed(sn, key),
-        onSessionUnreachable: () => this.replaceUnreachableSession(sn, key, held),
-      });
-      this.liveSources.set(key, source);
-      this.liveSourceOpts.set(key, opts);
+    if (source) {
+      this.warnIgnoredLiveOpts(key, opts);
       return source;
     }
-    this.warnIgnoredLiveOpts(key, opts);
+    const logger = this.deps.logger ?? noopLogger;
+    // The station's OWN shared session already carrying a sibling's live view is not a refusal — it is
+    // given its own connection instead, so both cameras stream at full rate. See
+    // openDedicatedMediaSession's doc for the mechanism and where it comes from.
+    const serving = homeBaseAttached ? this.occupiedSiblingChannel(parentSn, key) : undefined;
+    const dedicated = serving !== undefined;
+    const held: HeldSession = { session: dedicated ? await this.openDedicatedMediaSession(parentSn) : session };
+    if (dedicated) this.dedicatedSessions.set(key, held.session);
+    source = new SharedLiveSource({
+      makeStream: (ctx) =>
+        new LiveStream(held.session, {
+          channel,
+          accountId,
+          homeBaseAttached,
+          eccPrivateKey: opts.eccPrivateKey,
+          keepAliveMs: opts.keepAliveMs,
+          reassertWanted: ctx.reassertWanted,
+          logger,
+        }),
+      lingerMs: opts.lingerMs,
+      preBufferSeconds: opts.preBufferSeconds,
+      powered: opts.powered,
+      batteryBudgetMs: opts.batteryBudgetMs,
+      budgetGraceMs: opts.budgetGraceMs,
+      logger,
+      label: key,
+      // A dedicated session has nothing to retain on the shared manager — it isn't registered there —
+      // and nothing else will ever need it once this source goes idle, so drop it outright rather than
+      // lingering the way the shared session's own idle window does.
+      onActive: () => {
+        if (!dedicated) this.manager.retain(parentSn);
+      },
+      onIdle: () => {
+        if (dedicated) this.dropLiveSource(key);
+        else this.manager.release(parentSn);
+      },
+      onStartFailed: () => this.onLiveStartFailed(sn, key),
+      // Already a no-op for any HomeBase-attached camera (shared session or dedicated alike) — see its
+      // own doc for why.
+      onSessionUnreachable: () => this.replaceUnreachableSession(sn, key, held),
+    });
+    this.liveSources.set(key, source);
+    this.liveSourceOpts.set(key, opts);
     return source;
   }
 
@@ -848,13 +907,24 @@ export class P2PCommandRouter {
     return consumer;
   }
 
-  /** Dispose one cached live source and forget it, so the next acquisition builds a fresh one. */
+  /**
+   * Dispose one cached live source and forget it, so the next acquisition builds a fresh one. Also
+   * closes and forgets its {@link dedicatedSessions} entry, if it had one — nothing else holds that
+   * connection, so nothing else will close it if this doesn't.
+   */
   private dropLiveSource(key: string): void {
     const source = this.liveSources.get(key);
     if (!source) return;
     source.dispose();
     this.liveSources.delete(key);
     this.liveSourceOpts.delete(key);
+    const dedicated = this.dedicatedSessions.get(key);
+    if (dedicated) {
+      this.dedicatedSessions.delete(key);
+      void dedicated
+        .close()
+        .catch((error) => this.reportError(error instanceof Error ? error : new Error(String(error))));
+    }
   }
 
   /**
