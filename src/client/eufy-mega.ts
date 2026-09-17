@@ -76,7 +76,7 @@ import {
   type RawParams,
 } from "../model/index.js";
 import { isHomeBase } from "../model/device-family.js";
-import { DeviceRegistry, type ParamChange } from "./device-registry.js";
+import { DeviceRegistry, type DeviceRecord, type ParamChange } from "./device-registry.js";
 import type {
   EufyMegaOptions,
   EufyMegaEvent,
@@ -1248,7 +1248,7 @@ export class EufyMega extends EventEmitter {
     const dev = Device.fromRecord(sn, rec, this.opts.logger);
     if (rec.dpParams) dev.applyParams(rec.dpParams);
     this.liveDevices.set(sn, new WeakRef(dev));
-    const ctx = await this.commandContext(sn);
+    const ctx = await this.commandContext(sn, rec);
     dev.bindActions(
       ctx,
       this.commandSinkFor(sn),
@@ -1996,8 +1996,18 @@ export class EufyMega extends EventEmitter {
     }
   }
 
-  private async commandContext(sn: string): Promise<CommandContext> {
-    const rec = await this.registry.record(sn);
+  /**
+   * `rec` lets a caller that already paid for a fresh {@link DeviceRegistry.record} hand it in rather
+   * than this fetching its own — `record()` has no short-lived memoization of its own (only the
+   * account-wide list underneath it does), so two calls back to back for the same serial are two real
+   * cloud round-trips for identical data. {@link getDevice} is exactly that caller: it already resolves
+   * one to build the `Device`, so without this every `getDevice` — and so every entry of `deviceList()`'s
+   * `Promise.all`, N of them at once — paid for the per-device overlay fetch TWICE. Measured contributing
+   * to devices.list occasionally missing HA's 15s RPC timeout: N devices already means N concurrent
+   * fetches; doubling it doubles how many stragglers a single slow one can hide among.
+   */
+  private async commandContext(sn: string, rec?: DeviceRecord): Promise<CommandContext> {
+    rec ??= await this.registry.record(sn);
     // Resolve the record synchronously from the registry (already loaded by `record()`) — the same
     // single lookup the command sink uses, and it never opens a transport just to read a record.
     const dev = this.registry.require(sn);
