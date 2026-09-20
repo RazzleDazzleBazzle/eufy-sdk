@@ -334,6 +334,24 @@ export class P2PCommandRouter {
   }
 
   /**
+   * Force a serial's session closed and discarded, standalone OR attached — deliberately without
+   * {@link resetStandaloneSession}'s "only if standalone" guard, for an external caller that has
+   * already confirmed (by whatever means is appropriate to it) that the session itself, not just one
+   * camera's use of it, is the thing that needs a fresh start. Safe for a shared HomeBase precisely
+   * because {@link SessionManager.resetWhenUnused} still only tears down once nothing is retained —
+   * this does not drop a genuinely active sibling viewer, it just means a caller expecting an
+   * immediate reset regardless of activity should confirm nothing is actively using the station first.
+   *
+   * Not part of the capability-observation system {@link resetStandaloneSession} serves — this is an
+   * on-demand recovery lever, not a post-write cache invalidation.
+   */
+  async resetSession(sn: string): Promise<void> {
+    const device = this.recordFor(sn);
+    const station = device ? this.stationKeyFor(device) : sn;
+    await this.manager.resetWhenUnused(station);
+  }
+
+  /**
    * Open (or reuse) the P2P session for a station **on demand**, coalescing concurrent cold opens via
    * the {@link SessionManager}. A command / stream / pre-warm opens only the station it targets; idle
    * battery stations auto-close. The station's own record carries the P2P creds — a serial with no

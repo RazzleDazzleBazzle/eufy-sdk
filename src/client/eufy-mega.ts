@@ -1969,6 +1969,31 @@ export class EufyMega extends EventEmitter {
   }
 
   /**
+   * Force this serial's P2P session closed and discarded, so the NEXT thing that needs it (a command,
+   * a live pull, a stream open) builds a completely fresh one from scratch instead of reusing whatever
+   * is currently registered — standalone or attached to a shared HomeBase, unlike the capability
+   * system's own post-write recycle, which only ever touches a standalone device's session.
+   *
+   * An on-demand recovery lever for a caller that has already established, by its own observation,
+   * that a station's session is stuck (repeatedly failing every attempt against it, while other
+   * account/cloud activity stays healthy) rather than merely busy or between uses — e.g. a host that
+   * tracks a sustained run of failed live pulls against one serial. Safe against a genuinely active
+   * sibling: it defers to {@link SessionManager.resetWhenUnused}'s own "not while retained" rule rather
+   * than force-closing regardless, so it will not drop a real viewer currently attached to the same
+   * station — it simply will not resolve until that viewer detaches.
+   *
+   * @example
+   * ```ts
+   * // A host's own health tracking noticed sn has failed its last N live-pull attempts in a row.
+   * await eufy.resetStationSession(sn);
+   * // The NEXT attempt for sn (or any sibling on the same station) now gets a fresh session.
+   * ```
+   */
+  async resetStationSession(sn: string): Promise<void> {
+    await this.p2p.resetSession(sn);
+  }
+
+  /**
    * Build the {@link CommandContext} for a device: the evidence a capability uses to resolve a
    * command variant (channel, codec, deviceType, model, reported param/DP ids) plus the RESOLVED
    * capability set that gates command building.
