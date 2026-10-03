@@ -4,6 +4,7 @@ import { CusPushEvent } from "../../push-events.js";
 import { bind } from "./bind.js";
 import type { CommandContext } from "../types.js";
 import type { Command } from "../../../core/contracts.js";
+import { Device } from "../../index.js";
 
 const ctx: CommandContext = {
   channel: 0,
@@ -19,7 +20,7 @@ const noIdentityCtx: CommandContext = { channel: 0, codec: "station", paramIds: 
 describe("arming capability module", () => {
   it("declares the capability + schema", () => {
     expect(ARMING.capability).toBe("arming");
-    expect(ARMING.properties.map((p) => p.name)).toEqual(["armingMode"]);
+    expect(ARMING.properties.map((p) => p.name)).toEqual(["armingMode", "schedule"]);
   });
 
   it("proves arming via the guard-mode param 1224", () => {
@@ -175,9 +176,30 @@ describe("arming capability module", () => {
     });
   });
 
+  describe("schedule (the station's own Schedule/Geo timetable, reported on every poll)", () => {
+    const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64");
+
+    it("decodes the base64+json timetable to an array of slots", () => {
+      const slots = [
+        { week: 4, start_h: 7, start_m: 0, end_h: 20, end_m: 20, mode_id: 1 },
+        { week: 4, start_h: 20, start_m: 20, end_h: 23, end_m: 59, mode_id: 3 },
+      ];
+      const dev = Device.fromRecord("station", {
+        model: "T8030",
+        params: { [ARMING_CMD.JSON_SCHEDULE]: b64(slots) },
+      });
+      expect(dev.getProperty("schedule")?.value).toEqual(slots);
+    });
+
+    it("is published as a read-only property (no write)", () => {
+      expect(ARMING_MEMBERS.schedule).not.toHaveProperty("write");
+    });
+  });
+
   it("ARMING_CMD names the wire ids (no bare literals)", () => {
     expect(ARMING_CMD.SET_ARMING).toBe(1224);
     expect(ARMING_CMD.ALARM_DELAY_CONFIG).toBe(1255);
+    expect(ARMING_CMD.JSON_SCHEDULE).toBe(1254);
   });
 
   it("AlarmDelaySeconds is exactly the app's own picker preset list", () => {

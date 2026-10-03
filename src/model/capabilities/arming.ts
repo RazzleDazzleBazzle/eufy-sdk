@@ -91,6 +91,12 @@ export const ARMING_CMD = {
    * see `AlarmDelayConfig`'s field docs.
    */
   ALARM_DELAY_CONFIG: 1255,
+  /**
+   * The station's own Schedule/Geo timetable (app `JSON_SCHEDULE`). Reported base64+json on every
+   * regular poll, not just a push — see `schedule`'s own doc for why that matters and for the
+   * provenance of this id/shape (NOT independently wire-captured by this SDK).
+   */
+  JSON_SCHEDULE: 1254,
 } as const;
 
 /**
@@ -341,6 +347,40 @@ export const ARMING_MEMBERS = {
       },
     "Write the full per-mode alarm/arm-delay configuration.",
   ),
+
+  /**
+   * The station's own Schedule/Geo timetable — the day/time slots the hub itself consults to decide
+   * which mode is enforced right now, while `mode` reads back only the literal word `schedule` (or
+   * `geo`) for as long as that policy is active. Reported base64+json on every regular poll, not just
+   * a push, so a caller can compute "what mode applies right now" without waiting for the exact
+   * moment of a transition's own `armingModeChanged` push (see that event's own doc for why relying
+   * on the push alone leaves a caller stuck on a stale value whenever one is missed — e.g. a
+   * reconnect landing mid-transition).
+   *
+   * Decodes (via the param dictionary's own `base64+json` encoding, same mechanism `snoozeTime`'s
+   * raw config rides) to an array of slots, each shaped:
+   * `{ week, start_h, start_m, end_h, end_m, mode_id }` — `week` 0 = Sunday, `start_h`/`start_m`/
+   * `end_h`/`end_m` are local hour/minute with the end boundary EXCLUSIVE, and `mode_id` is the same
+   * wire integer {@link ArmingMode}'s own `mode` property reads/writes (see `ARMING_MODE_WIRE`).
+   *
+   * NOT independently wire-captured by this SDK: the param id, its `base64+json` encoding, and the
+   * slot shape above are carried over from a third-party integration's own live capture against a
+   * real T8030 (`mega-yfue/ha-eufy-sdk` PR #67) — not this SDK's own capture session. Treat the exact
+   * field names/semantics as best-effort pending this SDK's own confirmation.
+   *
+   * Read-only: no capture (by this SDK or the source above) shows the SET direction for this param.
+   */
+  schedule: {
+    param: ARMING_CMD.JSON_SCHEDULE,
+    type: "string",
+    kind: "text",
+    provenance: "apk",
+    description:
+      "The station's raw Schedule/Geo timetable — an array of {week,start_h,start_m,end_h,end_m," +
+      "mode_id} slots a caller can use to compute which mode is currently enforced, without waiting " +
+      "for a transition's own push. Read-only; not independently wire-confirmed by this SDK (see " +
+      "member doc).",
+  },
 } as const satisfies Members;
 
 /**
