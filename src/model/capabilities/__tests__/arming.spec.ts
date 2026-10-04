@@ -179,16 +179,23 @@ describe("arming capability module", () => {
   describe("schedule (the station's own Schedule/Geo timetable, reported on every poll)", () => {
     const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64");
 
-    it("decodes the base64+json timetable to an array of slots", () => {
-      const slots = [
-        { week: 4, start_h: 7, start_m: 0, end_h: 20, end_m: 20, mode_id: 1 },
-        { week: 4, start_h: 20, start_m: 20, end_h: 23, end_m: 59, mode_id: 3 },
-      ];
+    it("decodes the base64+json timetable to its real {account_id, schedules} shape, not a bare array", () => {
+      // Confirmed live (2026-10-04): the slot array sits one key deep under `schedules`, not at the
+      // top level — a caller must read `.schedules` off the decoded object. A `decode` on this
+      // member cannot unwrap this automatically: it is structurally never invoked for an ENCODED
+      // param (see the member's own doc), so any unwrapping has to happen on the consumer side.
+      const payload = {
+        account_id: "abc123",
+        schedules: [
+          { week: 4, start_h: 7, start_m: 0, end_h: 20, end_m: 20, mode_id: 1 },
+          { week: 4, start_h: 20, start_m: 20, end_h: 23, end_m: 59, mode_id: 3 },
+        ],
+      };
       const dev = Device.fromRecord("station", {
         model: "T8030",
-        params: { [ARMING_CMD.JSON_SCHEDULE]: b64(slots) },
+        params: { [ARMING_CMD.JSON_SCHEDULE]: b64(payload) },
       });
-      expect(dev.getProperty("schedule")?.value).toEqual(slots);
+      expect(dev.getProperty("schedule")?.value).toEqual(payload);
     });
 
     it("is published as a read-only property (no write)", () => {

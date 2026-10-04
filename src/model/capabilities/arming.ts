@@ -358,15 +358,26 @@ export const ARMING_MEMBERS = {
    * reconnect landing mid-transition).
    *
    * Decodes (via the param dictionary's own `base64+json` encoding, same mechanism `snoozeTime`'s
-   * raw config rides) to an array of slots, each shaped:
-   * `{ week, start_h, start_m, end_h, end_m, mode_id }` — `week` 0 = Sunday, `start_h`/`start_m`/
-   * `end_h`/`end_m` are local hour/minute with the end boundary EXCLUSIVE, and `mode_id` is the same
-   * wire integer {@link ArmingMode}'s own `mode` property reads/writes (see `ARMING_MODE_WIRE`).
+   * raw config rides) to an OBJECT, not a bare array — CONFIRMED LIVE on a real T8030
+   * (2026-10-04): `{ account_id, schedules: [...slots] }`, the slot array one key deep.
+   * `property-id-integrity`'s own `decode` mechanism cannot unwrap this for a caller: it is
+   * structurally never invoked for an ENCODED param at all (`Device.applyParams` takes the
+   * `decodeEncoded` branch unconditionally whenever the param dictionary declares an `encoding`,
+   * which bypasses `coerce` — the only place a member's `decode` is ever read — entirely). A
+   * caller must read `.schedules` off the decoded object itself.
+   *
+   * Each slot is shaped `{ week, start_h, start_m, end_h, end_m, mode_id }` — `week` 0 = Sunday,
+   * `start_h`/`start_m`/`end_h`/`end_m` are local hour/minute with the end boundary EXCLUSIVE, and
+   * `mode_id` is the same wire integer {@link ArmingMode}'s own `mode` property reads/writes (see
+   * `ARMING_MODE_WIRE`).
    *
    * NOT independently wire-captured by this SDK: the param id, its `base64+json` encoding, and the
    * slot shape above are carried over from a third-party integration's own live capture against a
    * real T8030 (`mega-yfue/ha-eufy-sdk` PR #67) — not this SDK's own capture session. Treat the exact
-   * field names/semantics as best-effort pending this SDK's own confirmation.
+   * field names/semantics as best-effort pending this SDK's own confirmation. The `{account_id,
+   * schedules}` WRAPPER, by contrast, is this SDK's own live finding, made necessary by a real bug: a
+   * caller built against the bare-array shape the source PR's write-up showed (`ha-eufy-sdk`'s
+   * `resolve_current_mode()`) got nothing usable back, for every account, until this was found.
    *
    * Read-only: no capture (by this SDK or the source above) shows the SET direction for this param.
    */
@@ -376,10 +387,10 @@ export const ARMING_MEMBERS = {
     kind: "text",
     provenance: "apk",
     description:
-      "The station's raw Schedule/Geo timetable — an array of {week,start_h,start_m,end_h,end_m," +
-      "mode_id} slots a caller can use to compute which mode is currently enforced, without waiting " +
-      "for a transition's own push. Read-only; not independently wire-confirmed by this SDK (see " +
-      "member doc).",
+      "The station's raw Schedule/Geo timetable — {account_id, schedules: [...]}, where each slot is " +
+      "{week,start_h,start_m,end_h,end_m,mode_id}. A caller can use schedules to compute which mode " +
+      "is currently enforced, without waiting for a transition's own push. Read-only; not " +
+      "independently wire-confirmed by this SDK (see member doc).",
   },
 } as const satisfies Members;
 
